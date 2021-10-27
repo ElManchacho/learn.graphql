@@ -2,6 +2,8 @@ const e = require('cors');
 var express = require('express');
 var { graphqlHTTP } = require('express-graphql');
 var { buildSchema } = require('graphql');
+var gql = require('graphql-tag');
+var {makeExecutableSchema} = require('graphql-tools')
 
 const { Pool } = require('pg');
 const pool = new Pool({
@@ -20,15 +22,24 @@ async function getUsers() {
   return rows;
 }
 
-async function addUser(firstname,lastname,password,email) {
+/**query{
+  users{
+    email
+  }
+} */
+
+
+async function register(_,{firstname,lastname,password,email}) {
+
   var ran = Math.floor(Math.random()*100000000);
-  console.log(`INSERT Job done `+ran+` ${firstname}, ${lastname},${password}, ${email}`); 
-  const { rows } = await pool.query("INSERT INTO users (firstname,lastname,password,email) VALUES ($1,$2,$3,$4) RETURNING *", [firstname,lastname,password,email]);
-  return rows
+  console.log(firstname,lastname,password,email);
+  console.log(`INSERT user done : ID=`+`${ran}, ${email}, ${password}, ${firstname}, ${lastname}`); 
+  const { rows } = await pool.query("INSERT INTO users (id,email,password,firstname,lastname) VALUES ($1,$2,$3,$4,$5) RETURNING *", [ran,email,password,firstname,lastname]);
+  return rows[0]
 }
 
 
-var schema = buildSchema(`
+var typeDefs = gql`
   type User{
     id: Int,
     email: String,
@@ -39,33 +50,23 @@ var schema = buildSchema(`
   type Query{
       users:[User]
   }
-  type Mutation {
+  type Mutation{
     register(firstname:String!,lastname:String!,password:String!,email:String!):User!
   }
-`);
-
-/*
-
-query{
-  users{
-    id
-    lastname
-    firstname
-    email
-    password
-  }
-}
-
-*/
+`;
 
 //var data = require('./user.json');
-
-var root = { users: getUsers(), register : addUser };
+ 
+var resolvers = { Mutation : {register}, Query :{users: getUsers} };
 
 var app = express();
 app.use('/graphql', graphqlHTTP({
-  schema: schema,
-  rootValue: root,
+  schema:makeExecutableSchema(
+      {
+          typeDefs,
+          resolvers
+        }
+        ),
   graphiql: true,
 }));
 app.listen(4000, () => console.log('Now browse to localhost:4000/graphql'));
